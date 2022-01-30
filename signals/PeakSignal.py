@@ -1,7 +1,6 @@
 from .Signal import Signal
 import numpy as np
 from scipy import interpolate, integrate
-from scipy.stats import median_abs_deviation
 import warnings
 
 class PeakSignal(Signal):
@@ -26,7 +25,7 @@ class PeakSignal(Signal):
 		"""Returns the noise of the signal defined as the standard deviation of the samples before the peak starts, or `float('NaN')` if it cannot be determined."""
 		if not hasattr(self, '_noise'):
 			try:
-				self._noise = median_abs_deviation(self.samples[:np.argmax(self.samples)])*1.4826 # https://en.wikipedia.org/wiki/Median_absolute_deviation#Relation_to_standard_deviation
+				self._noise = np.std(self.samples[:np.argmax(self.samples)])
 			except IndexError: # This means that `self.rising_edge_indices` returned an empty list because it could not find the rising edge.
 				self._noise = float('NaN')
 		return self._noise
