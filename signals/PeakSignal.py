@@ -7,10 +7,36 @@ class PeakSignal(Signal):
 	"""Class intended to deal with 'single peak signals', i.e. a signal that is 'zero zero PEAK zero zero'."""
 	
 	@property
+	def peak_start_index(self) -> int:
+		"""Returns the index of the sample where the peak starts."""
+		if not hasattr(self, '_peak_start_index'):
+			try:
+				peak_index = np.argmax(self.samples)
+				median_before_peak = np.nanmedian(self.samples[:peak_index])
+				indices_where_samples_equals_median = np.where(self.samples==median_before_peak)[0]
+				temp = indices_where_samples_equals_median < peak_index
+				arg_of_last_sample_with_median_value_before_peak_starts = indices_where_samples_equals_median[np.where(temp)[-1][-1]]
+				self._peak_start_index = arg_of_last_sample_with_median_value_before_peak_starts
+			except:
+				self._peak_start_index = None
+		return self._peak_start_index
+	
+	@property
+	def peak_start_time(self) -> float:
+		"""Returns the time at which the peak starts. The current implementation returns the time of the sample with `self.peak_start_index`."""
+		if self.peak_start_index is not None:
+			return self.time[self.peak_start_index]
+		else:
+			return float('NaN')
+	
+	@property
 	def baseline(self) -> float:
 		"""Returns the baseline of the signal, i.e. the value at which it was stable before the peak started."""
 		if not hasattr(self, '_baseline'):
-			self._baseline = np.nanmedian(self.samples[:np.argmax(self.samples)])
+			try:
+				self._baseline = np.nanmean(self.samples[:self.peak_start_index-1])
+			except:
+				self._baseline = float('NaN')
 		return self._baseline
 	
 	@property
@@ -25,8 +51,8 @@ class PeakSignal(Signal):
 		"""Returns the noise of the signal defined as the standard deviation of the samples before the peak starts, or `float('NaN')` if it cannot be determined."""
 		if not hasattr(self, '_noise'):
 			try:
-				self._noise = np.std(self.samples[:np.argmax(self.samples)])
-			except IndexError: # This means that `self.rising_edge_indices` returned an empty list because it could not find the rising edge.
+				self._noise = np.nanstd(self.samples[:self.peak_start_index-1])
+			except:
 				self._noise = float('NaN')
 		return self._noise
 	
@@ -176,7 +202,7 @@ class PeakSignal(Signal):
 			raise ValueError(f'`threshold` must be within 0 and 100, received {threshold}.')
 		return self.find_time_at_falling_edge(threshold) - self.find_time_at_rising_edge(threshold)
 
-def draw_in_plotly(signal, fig=None, baseline=True, noise=True, amplitude=True, rise_time=True, time_over_noise=True, peak_integral=True):
+def draw_in_plotly(signal, fig=None, baseline=True, noise=True, amplitude=True, rise_time=True, time_over_noise=True, peak_integral=True, peak_start_time=True):
 	"""Plot the signal along with the different quantities. `fig` is a plotly figure."""
 	import plotly.graph_objects as go
 	if not isinstance(signal, PeakSignal):
@@ -273,6 +299,16 @@ def draw_in_plotly(signal, fig=None, baseline=True, noise=True, amplitude=True, 
 				line = dict(color='#bf6c00', dash='dashdot'),
 				marker = dict(size=11),
 			)
+		)
+	if peak_start_time == True and not np.isnan(signal.peak_start_time):
+		fig.add_vline(
+			x = signal.peak_start_time,
+			line_color = 'black',
+			line_dash = 'dashdot',
+			line_width = .5,
+			annotation_text = f'Peak start time = {signal.peak_start_time:.2e}',
+			annotation_textangle = -90,
+			annotation_position = 'top left',
 		)
 
 	return fig
