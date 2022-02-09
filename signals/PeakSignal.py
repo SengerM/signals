@@ -2,6 +2,7 @@ from .Signal import Signal
 import numpy as np
 from scipy import interpolate, integrate
 import warnings
+from scipy.stats import median_abs_deviation
 
 class PeakSignal(Signal):
 	"""Class intended to deal with 'single peak signals', i.e. a signal that is 'zero zero PEAK zero zero'."""
@@ -13,10 +14,9 @@ class PeakSignal(Signal):
 			try:
 				peak_index = np.argmax(self.samples)
 				median_before_peak = np.nanmedian(self.samples[:peak_index])
-				indices_where_samples_equals_median = np.where(self.samples==median_before_peak)[0]
-				temp = indices_where_samples_equals_median < peak_index
-				arg_of_last_sample_with_median_value_before_peak_starts = indices_where_samples_equals_median[np.where(temp)[-1][-1]]
-				self._peak_start_index = arg_of_last_sample_with_median_value_before_peak_starts
+				std_before_peak = median_abs_deviation(self.samples[:peak_index])*1.4826 # https://en.wikipedia.org/wiki/Median_absolute_deviation#Relation_to_standard_deviation
+				indices_where_signal_is_lower_than_median = np.squeeze(np.where(self.samples<=median_before_peak+std_before_peak))
+				self._peak_start_index = indices_where_signal_is_lower_than_median[np.squeeze(np.where(indices_where_signal_is_lower_than_median<peak_index))[-1]]
 			except:
 				self._peak_start_index = None
 		return self._peak_start_index
