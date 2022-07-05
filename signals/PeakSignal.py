@@ -5,7 +5,9 @@ import warnings
 from scipy.stats import median_abs_deviation
 
 class PeakSignal(Signal):
-	"""Class intended to deal with 'single peak signals', i.e. a signal that is 'zero zero PEAK zero zero'."""
+	"""Class intended to deal with 'single peak signals', i.e. a signal 
+	that is 'zero zero PEAK zero zero'.
+	"""
 	
 	@property
 	def peak_start_index(self) -> int:
@@ -23,7 +25,10 @@ class PeakSignal(Signal):
 	
 	@property
 	def peak_start_time(self) -> float:
-		"""Returns the time at which the peak starts. The current implementation returns the time of the sample with `self.peak_start_index`."""
+		"""Returns the time at which the peak starts. The current 
+		implementation returns the time of the sample with 
+		`self.peak_start_index`.
+		"""
 		if self.peak_start_index is not None:
 			return self.time[self.peak_start_index]
 		else:
@@ -31,7 +36,9 @@ class PeakSignal(Signal):
 	
 	@property
 	def baseline(self) -> float:
-		"""Returns the baseline of the signal, i.e. the value at which it was stable before the peak started."""
+		"""Returns the baseline of the signal, i.e. the value at which 
+		it was stable before the peak started.
+		"""
 		if not hasattr(self, '_baseline'):
 			try:
 				self._baseline = np.nanmean(self.samples[:self.peak_start_index-1])
@@ -41,14 +48,19 @@ class PeakSignal(Signal):
 	
 	@property
 	def amplitude(self) -> float:
-		"""Returns the amplitude of the signal defined as the difference between the maximum value and the baseline."""
+		"""Returns the amplitude of the signal defined as the difference 
+		between the maximum value and the baseline.
+		"""
 		if not hasattr(self, '_amplitude'):
 			self._amplitude = (self.samples - self.baseline).max()
 		return self._amplitude
 	
 	@property
 	def noise(self) -> float:
-		"""Returns the noise of the signal defined as the standard deviation of the samples before the peak starts, or `float('NaN')` if it cannot be determined."""
+		"""Returns the noise of the signal defined as the standard 
+		deviation of the samples before the peak starts, or `float('NaN')` 
+		if it cannot be determined.
+		"""
 		if not hasattr(self, '_noise'):
 			try:
 				self._noise = np.nanstd(self.samples[:self.peak_start_index-1])
@@ -63,7 +75,9 @@ class PeakSignal(Signal):
 	
 	@property
 	def rise_time(self) -> float:
-		"""Returns the rise time defined as the time spent by the signal to go from 10 % to 90 %."""
+		"""Returns the rise time defined as the time spent by the signal 
+		to go from 10 % to 90 %.
+		"""
 		if not hasattr(self, '_rise_time'):
 			try:
 				self._rise_time = self.find_time_at_rising_edge(90) - self.find_time_at_rising_edge(10)
@@ -73,7 +87,11 @@ class PeakSignal(Signal):
 	
 	@property
 	def rising_edge_indices(self) -> list:
-		"""Returns a list of integer numbers corresponding to the indices of the `time` and `samples` arrays where the rising edge is located. The rising edge is considered to start at 10 % and end at 90 %. If the rising edge cannot be found, returns an empty list."""
+		"""Returns a list of integer numbers corresponding to the indices 
+		of the `time` and `samples` arrays where the rising edge is located. 
+		The rising edge is considered to start at 10 % and end at 90 %. 
+		If the rising edge cannot be found, returns an empty list.
+		"""
 		if not hasattr(self, '_rising_edge_indices'):
 			try:
 				self._rising_edge_indices = self.find_rising_edge_indices(low=10,high=90)
@@ -83,7 +101,11 @@ class PeakSignal(Signal):
 	
 	@property
 	def falling_edge_indices(self) -> list:
-		"""Returns a list of integer numbers corresponding to the indices of the `time` and `samples` arrays where the falling edge is located. The falling edge is considered to start at 10 % and end at 90 %. If the falling edge cannot be found, returns an empty list."""
+		"""Returns a list of integer numbers corresponding to the indices 
+		of the `time` and `samples` arrays where the falling edge is located. 
+		The falling edge is considered to start at 10 % and end at 90 %. 
+		If the falling edge cannot be found, returns an empty list.
+		"""
 		if not hasattr(self, '_falling_edge_indices'):
 			try:
 				self._falling_edge_indices = self.find_falling_edge_indices(low=10,high=90)
@@ -103,7 +125,11 @@ class PeakSignal(Signal):
 	
 	@property
 	def peak_integral(self) -> float:
-		"""Returns the integral under the peak. The peak start is defined as that point where the signal goes outside of the noise band, and the end is the moment in which it goes back inside the noise band."""
+		"""Returns the integral under the peak. The peak start is defined 
+		as that point where the signal goes outside of the noise band, 
+		and the end is the moment in which it goes back inside the noise 
+		band.
+		"""
 		if not hasattr(self, '_peak_integral'):
 			try:
 				integral, *_ = integrate.quad(
@@ -117,9 +143,17 @@ class PeakSignal(Signal):
 		return self._peak_integral
 	
 	def find_rising_edge_indices(self, low: float, high: float) -> list:
-		"""Finds the rising edge of the signal. Returns a list of integers corresponding to the indices of the rising edge between `low` % and `high` %.
-		- low: float, percentage to consider where the rising edge starts, e.g. 10 %.
-		- high: float, percentage to consider where the rising edge ends, e.g. 90 %."""
+		"""Finds the rising edge of the signal. Returns a list of integers 
+		corresponding to the indices of the rising edge between `low` % and `high` %.
+		
+		Parameters
+		----------
+		low: float
+			Percentage to consider where the rising edge starts, e.g. 
+			10 %.
+		high: float
+			Percentage to consider where the rising edge ends, e.g. 90 %.
+		"""
 		for name,x in {'low': low, 'high': high}.items():
 			if not isinstance(x, (int, float)):
 				raise TypeError(f'`{name}` must be a float number, but received object of type {type(x)}.')
@@ -140,9 +174,18 @@ class PeakSignal(Signal):
 		return [k for k in range(k_start_rise, k_stop_rise)]
 	
 	def find_falling_edge_indices(self, low: float, high: float) -> list:
-		"""Finds the falling edge of the signal. Returns a list of integers corresponding to the indices of the falling edge between `low` % and `high` %.
-		- low: float, percentage to consider where the falling edge starts, e.g. 10 %.
-		- high: float, percentage to consider where the falling edge ends, e.g. 90 %."""
+		"""Finds the falling edge of the signal. Returns a list of integers 
+		corresponding to the indices of the falling edge between `low` % 
+		and `high` %.
+		
+		Parameters
+		----------
+		low: float
+			Percentage to consider where the falling edge starts, e.g. 
+			10 %.
+		high: float
+			Percentage to consider where the falling edge ends, e.g. 90 %.
+		"""
 		for name,x in {'low': low, 'high': high}.items():
 			if not isinstance(x, (int, float)):
 				raise TypeError(f'`{name}` must be a float number, but received object of type {type(x)}.')
@@ -163,7 +206,10 @@ class PeakSignal(Signal):
 		return [k for k in range(k_start_fall, k_stop_fall)]
 	
 	def find_time_at_rising_edge(self, threshold: float) -> float:
-		"""Given some threshold value (as a percentage) returns the time at which the signal crosses such threshold within the rising edge. The signal is linearly interpolated between samples."""
+		"""Given some threshold value (as a percentage) returns the time 
+		at which the signal crosses such threshold within the rising edge. 
+		The signal is linearly interpolated between samples.
+		"""
 		if not isinstance(threshold, (float, int)):
 			raise TypeError(f'`threshold` must be a float number, received object of type {type(threshold)}.')
 		if not 0 < threshold < 100:
@@ -179,7 +225,10 @@ class PeakSignal(Signal):
 		)(self.amplitude*threshold/100 + self.baseline)
 	
 	def find_time_at_falling_edge(self, threshold: float) -> float:
-		"""Given some threshold value (as a percentage) returns the time at which the signal crosses such threshold within the falling edge. The signal is linearly interpolated between samples."""
+		"""Given some threshold value (as a percentage) returns the time 
+		at which the signal crosses such threshold within the falling edge. 
+		The signal is linearly interpolated between samples.
+		"""
 		if not isinstance(threshold, (float, int)):
 			raise TypeError(f'`threshold` must be a float number, received object of type {type(threshold)}.')
 		if not 0 < threshold < 100:
@@ -195,7 +244,9 @@ class PeakSignal(Signal):
 		)(self.amplitude*threshold/100 + self.baseline)
 	
 	def find_time_over_threshold(self, threshold: float) -> float:
-		"""Returns the time over some threshold where `threshold` is a percentage."""
+		"""Returns the time over some threshold where `threshold` is a 
+		percentage.
+		"""
 		if not isinstance(threshold, (float, int)):
 			raise TypeError(f'`threshold` must be a number, received object of type {type(threshold)}.')
 		if not 0 < threshold < 100:
@@ -203,7 +254,9 @@ class PeakSignal(Signal):
 		return self.find_time_at_falling_edge(threshold) - self.find_time_at_rising_edge(threshold)
 
 def draw_in_plotly(signal, fig=None, baseline=True, noise=True, amplitude=True, rise_time=True, time_over_noise=True, peak_integral=True, peak_start_time=True):
-	"""Plot the signal along with the different quantities. `fig` is a plotly figure."""
+	"""Plot the signal along with the different quantities. `fig` is a 
+	plotly figure.
+	"""
 	import plotly.graph_objects as go
 	if not isinstance(signal, PeakSignal):
 		raise TypeError(f'`signal` must be an instance of {repr(PeakSignal)}, received object of type {repr(type(signal))}.')
