@@ -1,6 +1,6 @@
 from .Signal import Signal
 import numpy as np
-from scipy import interpolate, integrate
+from scipy import interpolate
 import warnings
 from scipy.stats import median_abs_deviation
 
@@ -132,12 +132,8 @@ class PeakSignal(Signal):
 		"""
 		if not hasattr(self, '_peak_integral'):
 			try:
-				integral, *_ = integrate.quad(
-					func = lambda t: (self(time=t)-self.baseline), 
-					a = self.find_time_at_rising_edge(self.noise/self.amplitude*100),
-					b = self.find_time_at_falling_edge(self.noise/self.amplitude*100),
-				)
-				self._peak_integral = integral
+				peak_points = (self.time>=self.find_time_at_rising_edge(self.noise/self.amplitude*100))&(self.time<=self.find_time_at_falling_edge(self.noise/self.amplitude*100))
+				self._peak_integral = np.trapz(x=self.time[peak_points], y=self.samples[peak_points]-self.baseline)
 			except:
 				self._peak_integral = float('NaN')
 		return self._peak_integral
