@@ -142,6 +142,19 @@ class PeakSignal(Signal):
 				self._peak_integral = float('NaN')
 		return self._peak_integral
 	
+	@property
+	def integral_from_baseline(self) -> float:
+		"""Returns the integral of the whole signal taking as 0 the baseline. 
+		This means that values above the baseline contribute positively
+		and values below contribute negatively.
+		"""
+		if not hasattr(self, '_integral_from_baseline'):
+			try:
+				self._integral_from_baseline = np.trapz(x=self.time, y=self.samples-self.baseline)
+			except:
+				self._integral_from_baseline = float('NaN')
+		return self._integral_from_baseline
+	
 	def find_rising_edge_indices(self, low: float, high: float) -> list:
 		"""Finds the rising edge of the signal. Returns a list of integers 
 		corresponding to the indices of the rising edge between `low` % and `high` %.
