@@ -228,10 +228,10 @@ class PeakSignal(Signal):
 		if np.isnan(self.baseline):
 			raise RuntimeError('Cannot find the baseline of the signal.')
 		rising_edge_indices = self.find_rising_edge_indices(low=threshold, high=99)
-		return interpolate.interp1d(
+		return float(interpolate.interp1d(
 			x = self.samples[rising_edge_indices],
 			y = self.time[rising_edge_indices],
-		)(self.amplitude*threshold/100 + self.baseline)
+		)(self.amplitude*threshold/100 + self.baseline))
 	
 	def find_time_at_falling_edge(self, threshold: float) -> float:
 		"""Given some threshold value (as a percentage) returns the time 
@@ -247,10 +247,10 @@ class PeakSignal(Signal):
 		if np.isnan(self.baseline):
 			raise RuntimeError('Cannot find the baseline of the signal.')
 		falling_edge_indices = self.find_falling_edge_indices(low=threshold, high=99)
-		return interpolate.interp1d(
+		return float(interpolate.interp1d(
 			x = self.samples[falling_edge_indices],
 			y = self.time[falling_edge_indices],
-		)(self.amplitude*threshold/100 + self.baseline)
+		)(self.amplitude*threshold/100 + self.baseline))
 	
 	def find_time_over_threshold(self, threshold: float) -> float:
 		"""Returns the time over some threshold where `threshold` is a 
