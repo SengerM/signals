@@ -4,6 +4,8 @@ from scipy import interpolate
 import warnings
 from scipy.stats import median_abs_deviation
 
+warnings.filterwarnings('ignore', message='Mean of empty slice') # Don't know exactly where this warning is happening, but it does not affect the results.
+
 class PeakSignal(Signal):
 	"""Class intended to deal with 'single peak signals', i.e. a signal 
 	that is 'zero zero PEAK zero zero'.
