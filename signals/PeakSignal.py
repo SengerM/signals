@@ -71,7 +71,12 @@ class PeakSignal(Signal):
 	@property
 	def SNR(self) -> float:
 		"""Returns the signal to noise ratio defined as amplitude/noise."""
-		return self.amplitude/self.noise
+		if not hasattr(self, '_SNR'):
+			try:
+				self._SNR = self.amplitude/self.noise
+			except:
+				self._SNR = float('NaN')
+		return self._SNR
 	
 	@property
 	def rise_time(self) -> float:
