@@ -65,7 +65,9 @@ class PeakSignal(Signal):
 		"""
 		if not hasattr(self, '_noise'):
 			try:
-				self._noise = np.nanstd(self.samples[:self.peak_start_index-1])
+				with warnings.catch_warnings():
+					warnings.filterwarnings('ignore')
+					self._noise = np.nanstd(self.samples[:self.peak_start_index-1])
 			except:
 				self._noise = float('NaN')
 		return self._noise
@@ -74,9 +76,9 @@ class PeakSignal(Signal):
 	def SNR(self) -> float:
 		"""Returns the signal to noise ratio defined as amplitude/noise."""
 		if not hasattr(self, '_SNR'):
-			try:
+			if self.noise != 0:
 				self._SNR = self.amplitude/self.noise
-			except:
+			else:
 				self._SNR = float('NaN')
 		return self._SNR
 	
