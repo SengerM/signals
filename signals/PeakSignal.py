@@ -21,7 +21,7 @@ class PeakSignal(Signal):
 				std_before_peak = median_abs_deviation(self.samples[:peak_index])*1.4826 # https://en.wikipedia.org/wiki/Median_absolute_deviation#Relation_to_standard_deviation
 				indices_where_signal_is_lower_than_median = np.squeeze(np.where(self.samples<=median_before_peak+std_before_peak))
 				self._peak_start_index = indices_where_signal_is_lower_than_median[np.squeeze(np.where(indices_where_signal_is_lower_than_median<peak_index))[-1]]
-			except:
+			except Exception:
 				self._peak_start_index = None
 		return self._peak_start_index
 	
@@ -44,7 +44,7 @@ class PeakSignal(Signal):
 		if not hasattr(self, '_baseline'):
 			try:
 				self._baseline = np.nanmean(self.samples[:self.peak_start_index-1])
-			except:
+			except Exception:
 				self._baseline = float('NaN')
 		return self._baseline
 	
@@ -54,7 +54,10 @@ class PeakSignal(Signal):
 		between the maximum value and the baseline.
 		"""
 		if not hasattr(self, '_amplitude'):
-			self._amplitude = (self.samples - self.baseline).max()
+			try:
+				self._amplitude = (self.samples - self.baseline).max()
+			except Exception:
+				self._amplitude = float('NaN')
 		return self._amplitude
 	
 	@property
@@ -68,7 +71,7 @@ class PeakSignal(Signal):
 				with warnings.catch_warnings():
 					warnings.filterwarnings('ignore')
 					self._noise = np.nanstd(self.samples[:self.peak_start_index-1])
-			except:
+			except Exception:
 				self._noise = float('NaN')
 		return self._noise
 	
@@ -90,7 +93,7 @@ class PeakSignal(Signal):
 		if not hasattr(self, '_rise_time'):
 			try:
 				self._rise_time = self.find_time_at_rising_edge(90) - self.find_time_at_rising_edge(10)
-			except (ValueError, RuntimeError):
+			except Exception:
 				self._rise_time = float('NaN')
 		return self._rise_time
 	
@@ -104,7 +107,7 @@ class PeakSignal(Signal):
 		if not hasattr(self, '_rising_edge_indices'):
 			try:
 				self._rising_edge_indices = self.find_rising_edge_indices(low=10,high=90)
-			except:
+			except Exception:
 				self._rising_edge_indices = []
 		return self._rising_edge_indices
 	
@@ -118,7 +121,7 @@ class PeakSignal(Signal):
 		if not hasattr(self, '_falling_edge_indices'):
 			try:
 				self._falling_edge_indices = self.find_falling_edge_indices(low=10,high=90)
-			except:
+			except Exception:
 				self._falling_edge_indices = []
 		return self._falling_edge_indices
 	
@@ -128,7 +131,7 @@ class PeakSignal(Signal):
 		if not hasattr(self, '_time_over_noise'):
 			try:
 				self._time_over_noise = self.find_time_over_threshold(threshold = self.noise/self.amplitude*100)
-			except:
+			except Exception:
 				self._time_over_noise = float('NaN')
 		return self._time_over_noise
 	
@@ -143,7 +146,7 @@ class PeakSignal(Signal):
 			try:
 				peak_points = (self.time>=self.find_time_at_rising_edge(self.noise/self.amplitude*100))&(self.time<=self.find_time_at_falling_edge(self.noise/self.amplitude*100))
 				self._peak_integral = np.trapz(x=self.time[peak_points], y=self.samples[peak_points]-self.baseline)
-			except:
+			except Exception:
 				self._peak_integral = float('NaN')
 		return self._peak_integral
 	
@@ -156,7 +159,7 @@ class PeakSignal(Signal):
 		if not hasattr(self, '_integral_from_baseline'):
 			try:
 				self._integral_from_baseline = np.trapz(x=self.time, y=self.samples-self.baseline)
-			except:
+			except Exception:
 				self._integral_from_baseline = float('NaN')
 		return self._integral_from_baseline
 	
