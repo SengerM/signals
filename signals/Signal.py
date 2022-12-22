@@ -27,5 +27,7 @@ class Signal:
 		"""Returns the value of the signal at any time."""
 		if interpolation == 'linear':
 			return interpolate.interp1d(self.time, self.samples)(time)
+		elif isinstance(interpolation, int):
+			return interpolate.interp1d(self.time, self.samples, kind=interpolation)(time)
 		else:
-			raise NotImplementedError(f'The only interpolation method implemented is `linear`.')
+			raise NotImplementedError(f'Interpolation {repr(interpolation)} not implemented.')
