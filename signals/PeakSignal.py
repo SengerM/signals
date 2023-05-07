@@ -401,3 +401,60 @@ def draw_in_plotly(signal, fig=None, baseline=True, noise=True, amplitude=True, 
 		)
 
 	return fig
+
+def compress_PeakSignal_V230507(signal:PeakSignal)->dict:
+	"""This is a (almost) lossless compression method that simply drops all the
+	samples that are in front of the peak, previously calculating the 
+	baseline and noise amplitude. From the peak start signal on to the end,
+	all the samples as well as the time is kept. This allows to reconstruct
+	the waveform afterward "without loss", meaning that all the information
+	in the peak is original, as well as whatever happened after the peak.
+	Before the peak, where we assume there was no causal effect from the
+	peak and only noise, new fake samples can be generated easily with
+	the same baseline and noise amplitude as white noise.
+	To recover the `PeakSignal` object (i.e. to decompress this) use
+	the function `decompress_signal_V230507`.
+	"""
+	if not isinstance(signal, PeakSignal):
+		raise TypeError(f'`signal` must be an instance of {repr(PeakSignal)}, received object of type {type(signal)}. ')
+	try:
+		return dict(
+			compressed_time = tuple(signal.time[signal.peak_start_index:]),
+			compressed_samples = tuple(signal.samples[signal.peak_start_index:]),
+			noise = signal.noise,
+			baseline = signal.baseline,
+			number_of_samples_removed = signal.peak_start_index-1,
+			compression_algorithm = 'compress_signal_V230507',
+		)
+	except Exception as e: # This happens when it cannot be compressed for some reason.
+		return dict(
+			compressed_time = tuple(signal.time),
+			compressed_samples = tuple(signal.samples),
+			noise = float('NaN'),
+			baseline = float('NaN'),
+			number_of_samples_removed = 0,
+			compression_algorithm = 'compress_signal_V230507',
+		)
+	
+def decompress_PeakSignal_V230507(compressed_signal:dict)->PeakSignal:
+	"""Recover a signal that was compressed with `compress_PeakSignal_V230507`."""
+	if not isinstance(compressed_signal, dict):
+		raise TypeError(f'`compressed_signal` must be a dictionary, received object of type {type(compressed_signal)}. ')
+	if compressed_signal.get('compression_algorithm') != 'compress_signal_V230507':
+		raise ValueError(f'Cannot decompress a compressed signal whose `compression_algorithm` field is {repr(compressed_signal.get("compression_algorithm"))}. ')
+	
+	n_samples_to_add = compressed_signal['number_of_samples_removed']
+	if n_samples_to_add == 0: # This means that there was no compression at all.
+		return PeakSignal(
+			time = compressed_signal['compressed_time'],
+			samples = compressed_signal['compressed_samples'],
+		)
+	sampling_period = np.diff(compressed_signal['compressed_time']).mean()
+	add_time = np.linspace(compressed_signal['compressed_time'][0]-sampling_period*(n_samples_to_add+1), compressed_signal['compressed_time'][0]-sampling_period, n_samples_to_add)
+	add_samples = np.random.randn(n_samples_to_add)
+	add_samples *= compressed_signal['noise']/add_samples.std()
+	add_samples += compressed_signal['baseline'] - add_samples.mean()
+	return PeakSignal(
+		time = np.concatenate([add_time, compressed_signal['compressed_time']]),
+		samples = np.concatenate([add_samples, compressed_signal['compressed_samples']]),
+	)
