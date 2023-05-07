@@ -274,6 +274,21 @@ class PeakSignal(Signal):
 			raise ValueError(f'`threshold` must be within 0 and 100, received {threshold}.')
 		return self.find_time_at_falling_edge(threshold) - self.find_time_at_rising_edge(threshold)
 
+	def get_peak_integral_fraction_time(self, fraction) -> float:
+		""" Get fraction of signal collected after a certain time
+		Added by A. Ilg and S. Burkhalter
+		"""
+		peak_points = (self.time >= self.find_time_at_rising_edge(self.noise/self.amplitude*100)) & (self.time <= self.find_time_at_falling_edge(self.noise/self.amplitude*100))
+		times = self.time[peak_points]
+		integrals = np.cumsum((self.samples[peak_points][:-1] - self.baseline) * np.diff(times))
+		full_integral = integrals[-1]
+		target_integral = fraction * full_integral
+		
+		# Find start and end times for target integral
+		start_index = np.argmin(np.abs(integrals - target_integral))
+		fraction_time = self.time[start_index]
+		return fraction_time
+
 def draw_in_plotly(signal, fig=None, baseline=True, noise=True, amplitude=True, rise_time=True, time_over_noise=True, peak_integral=True, peak_start_time=True):
 	"""Plot the signal along with the different quantities. `fig` is a 
 	plotly figure.
