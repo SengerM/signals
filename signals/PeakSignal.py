@@ -284,6 +284,21 @@ class PositivePeakSignal(Signal):
 		if not 0 < threshold < 100:
 			raise ValueError(f'`threshold` must be within 0 and 100, received {threshold}.')
 		return self.find_time_at_falling_edge(threshold) - self.find_time_at_rising_edge(threshold)
+	
+	def get_peak_integral_fraction_time(self, fraction) -> float:
+		""" Get fraction of signal collected after a certain time
+		Added by A. Ilg and S. Burkhalter
+		"""
+		peak_points = (self.time >= self.find_time_at_rising_edge(self.noise/self.amplitude*100)) & (self.time <= self.find_time_at_falling_edge(self.noise/self.amplitude*100))
+		times = self.time[peak_points]
+		integrals = np.cumsum((self.samples[peak_points][:-1] - self.baseline) * np.diff(times))
+		full_integral = integrals[-1]
+		target_integral = fraction * full_integral
+		
+		# Find start and end times for target integral
+		start_index = np.argmin(np.abs(integrals - target_integral))
+		fraction_time = self.time[start_index]
+		return fraction_time
 
 class PeakSignal(PositivePeakSignal):
 	"""Class to handle peaked signals, both positive and negative."""
@@ -447,3 +462,60 @@ def draw_in_plotly(signal, fig=None, baseline=True, noise=True, amplitude=True, 
 		)
 
 	return fig
+
+def compress_PeakSignal_V230507(signal:PeakSignal)->dict:
+	"""This is a (almost) lossless compression method that simply drops all the
+	samples that are in front of the peak, previously calculating the 
+	baseline and noise amplitude. From the peak start signal on to the end,
+	all the samples as well as the time is kept. This allows to reconstruct
+	the waveform afterward "without loss", meaning that all the information
+	in the peak is original, as well as whatever happened after the peak.
+	Before the peak, where we assume there was no causal effect from the
+	peak and only noise, new fake samples can be generated easily with
+	the same baseline and noise amplitude as white noise.
+	To recover the `PeakSignal` object (i.e. to decompress this) use
+	the function `decompress_signal_V230507`.
+	"""
+	if not isinstance(signal, PeakSignal):
+		raise TypeError(f'`signal` must be an instance of {repr(PeakSignal)}, received object of type {type(signal)}. ')
+	try:
+		return dict(
+			compressed_time = tuple(signal.time[signal.peak_start_index:]),
+			compressed_samples = tuple(signal.samples[signal.peak_start_index:]),
+			noise = signal.noise,
+			baseline = signal.baseline,
+			number_of_samples_removed = signal.peak_start_index-1,
+			compression_algorithm = 'compress_signal_V230507',
+		)
+	except Exception as e: # This happens when it cannot be compressed for some reason.
+		return dict(
+			compressed_time = tuple(signal.time),
+			compressed_samples = tuple(signal.samples),
+			noise = float('NaN'),
+			baseline = float('NaN'),
+			number_of_samples_removed = 0,
+			compression_algorithm = 'compress_signal_V230507',
+		)
+	
+def decompress_PeakSignal_V230507(compressed_signal:dict)->PeakSignal:
+	"""Recover a signal that was compressed with `compress_PeakSignal_V230507`."""
+	if not isinstance(compressed_signal, dict):
+		raise TypeError(f'`compressed_signal` must be a dictionary, received object of type {type(compressed_signal)}. ')
+	if compressed_signal.get('compression_algorithm') != 'compress_signal_V230507':
+		raise ValueError(f'Cannot decompress a compressed signal whose `compression_algorithm` field is {repr(compressed_signal.get("compression_algorithm"))}. ')
+	
+	n_samples_to_add = compressed_signal['number_of_samples_removed']
+	if n_samples_to_add == 0: # This means that there was no compression at all.
+		return PeakSignal(
+			time = compressed_signal['compressed_time'],
+			samples = compressed_signal['compressed_samples'],
+		)
+	sampling_period = np.diff(compressed_signal['compressed_time']).mean()
+	add_time = np.linspace(compressed_signal['compressed_time'][0]-sampling_period*(n_samples_to_add+1), compressed_signal['compressed_time'][0]-sampling_period, n_samples_to_add)
+	add_samples = np.random.randn(n_samples_to_add)
+	add_samples *= compressed_signal['noise']/add_samples.std()
+	add_samples += compressed_signal['baseline'] - add_samples.mean()
+	return PeakSignal(
+		time = np.concatenate([add_time, compressed_signal['compressed_time']]),
+		samples = np.concatenate([add_samples, compressed_signal['compressed_samples']]),
+	)
