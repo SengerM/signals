@@ -6,20 +6,31 @@ from scipy.stats import median_abs_deviation
 
 warnings.filterwarnings('ignore', message='Mean of empty slice') # Don't know exactly where this warning is happening, but it does not affect the results.
 
-class PeakSignal(Signal):
+def guess_peak_sign(samples):
+	return 1 if samples[:11].mean()<np.mean((samples.max(),samples.min())) else -1
+
+class PositivePeakSignal(Signal):
 	"""Class intended to deal with 'single peak signals', i.e. a signal 
-	that is 'zero zero PEAK zero zero'.
-	"""
+	that is 'zero zero PEAK zero zero' where 'zero' can be noise. It handles
+	only positive peaks."""
+	
+	@property
+	def t_max(self) -> float:
+		"""Returns the time at which the maximum sample is found, i.e.
+		the peak time."""
+		if not hasattr(self, '_t_max'):
+			self._t_max = self._time[np.argmax(self._samples)]
+		return self._t_max
 	
 	@property
 	def peak_start_index(self) -> int:
 		"""Returns the index of the sample where the peak starts."""
 		if not hasattr(self, '_peak_start_index'):
 			try:
-				peak_index = np.argmax(self.samples)
-				median_before_peak = np.nanmedian(self.samples[:peak_index])
-				std_before_peak = median_abs_deviation(self.samples[:peak_index])*1.4826 # https://en.wikipedia.org/wiki/Median_absolute_deviation#Relation_to_standard_deviation
-				indices_where_signal_is_lower_than_median = np.squeeze(np.where(self.samples<=median_before_peak+std_before_peak))
+				peak_index = np.argmax(self._samples)
+				median_before_peak = np.nanmedian(self._samples[:peak_index])
+				std_before_peak = median_abs_deviation(self._samples[:peak_index])*1.4826 # https://en.wikipedia.org/wiki/Median_absolute_deviation#Relation_to_standard_deviation
+				indices_where_signal_is_lower_than_median = np.squeeze(np.where(self._samples<=median_before_peak+std_before_peak))
 				self._peak_start_index = indices_where_signal_is_lower_than_median[np.squeeze(np.where(indices_where_signal_is_lower_than_median<peak_index))[-1]]
 			except Exception:
 				self._peak_start_index = None
@@ -37,25 +48,25 @@ class PeakSignal(Signal):
 			return float('NaN')
 	
 	@property
-	def baseline(self) -> float:
+	def _baseline_positive_peak(self) -> float:
 		"""Returns the baseline of the signal, i.e. the value at which 
 		it was stable before the peak started.
 		"""
 		if not hasattr(self, '_baseline'):
 			try:
-				self._baseline = np.nanmean(self.samples[:self.peak_start_index-1])
+				self._baseline = np.nanmean(self._samples[:self.peak_start_index-1])
 			except Exception:
 				self._baseline = float('NaN')
 		return self._baseline
 	
 	@property
-	def amplitude(self) -> float:
+	def _amplitude_positive_peak(self) -> float:
 		"""Returns the amplitude of the signal defined as the difference 
 		between the maximum value and the baseline.
 		"""
 		if not hasattr(self, '_amplitude'):
 			try:
-				self._amplitude = (self.samples - self.baseline).max()
+				self._amplitude = (self._samples - self._baseline_positive_peak).max()
 			except Exception:
 				self._amplitude = float('NaN')
 		return self._amplitude
@@ -70,7 +81,7 @@ class PeakSignal(Signal):
 			try:
 				with warnings.catch_warnings():
 					warnings.filterwarnings('ignore')
-					self._noise = np.nanstd(self.samples[:self.peak_start_index-1])
+					self._noise = np.nanstd(self._samples[:self.peak_start_index-1])
 			except Exception:
 				self._noise = float('NaN')
 		return self._noise
@@ -80,7 +91,7 @@ class PeakSignal(Signal):
 		"""Returns the signal to noise ratio defined as amplitude/noise."""
 		if not hasattr(self, '_SNR'):
 			if self.noise != 0:
-				self._SNR = self.amplitude/self.noise
+				self._SNR = self._amplitude_positive_peak/self.noise
 			else:
 				self._SNR = float('NaN')
 		return self._SNR
@@ -130,13 +141,13 @@ class PeakSignal(Signal):
 		"""Returns the time the pulse spends over the noise value."""
 		if not hasattr(self, '_time_over_noise'):
 			try:
-				self._time_over_noise = self.find_time_over_threshold(threshold = self.noise/self.amplitude*100)
+				self._time_over_noise = self.find_time_over_threshold(threshold = self.noise/self._amplitude_positive_peak*100)
 			except Exception:
 				self._time_over_noise = float('NaN')
 		return self._time_over_noise
 	
 	@property
-	def peak_integral(self) -> float:
+	def _peak_integral_positive_peak(self) -> float:
 		"""Returns the integral under the peak. The peak start is defined 
 		as that point where the signal goes outside of the noise band, 
 		and the end is the moment in which it goes back inside the noise 
@@ -144,21 +155,21 @@ class PeakSignal(Signal):
 		"""
 		if not hasattr(self, '_peak_integral'):
 			try:
-				peak_points = (self.time>=self.find_time_at_rising_edge(self.noise/self.amplitude*100))&(self.time<=self.find_time_at_falling_edge(self.noise/self.amplitude*100))
-				self._peak_integral = np.trapz(x=self.time[peak_points], y=self.samples[peak_points]-self.baseline)
+				peak_points = (self.time>=self.find_time_at_rising_edge(self.noise/self._amplitude_positive_peak*100))&(self.time<=self.find_time_at_falling_edge(self.noise/self._amplitude_positive_peak*100))
+				self._peak_integral = np.trapz(x=self.time[peak_points], y=self._samples[peak_points]-self._baseline_positive_peak)
 			except Exception:
 				self._peak_integral = float('NaN')
 		return self._peak_integral
 	
 	@property
-	def integral_from_baseline(self) -> float:
+	def _integral_from_baseline_positive_peak(self) -> float:
 		"""Returns the integral of the whole signal taking as 0 the baseline. 
 		This means that values above the baseline contribute positively
 		and values below contribute negatively.
 		"""
 		if not hasattr(self, '_integral_from_baseline'):
 			try:
-				self._integral_from_baseline = np.trapz(x=self.time, y=self.samples-self.baseline)
+				self._integral_from_baseline = np.trapz(x=self.time, y=self._samples-self._baseline_positive_peak)
 			except Exception:
 				self._integral_from_baseline = float('NaN')
 		return self._integral_from_baseline
@@ -180,13 +191,13 @@ class PeakSignal(Signal):
 				raise TypeError(f'`{name}` must be a float number, but received object of type {type(x)}.')
 		if not low < high:
 			raise ValueError(f'`low` must be less than `high`, received low={low} and high={high}.')
-		k = self.samples.argmax()
+		k = self._samples.argmax()
 		k_start_rise = None
 		k_stop_rise = None
 		while k > 0:
-			if self.samples[k] - self.baseline > self.amplitude*high/100:
+			if self._samples[k] - self._baseline_positive_peak > self._amplitude_positive_peak*high/100:
 				k_stop_rise = k+1
-			if self.samples[k] - self.baseline < self.amplitude*low/100:
+			if self._samples[k] - self._baseline_positive_peak < self._amplitude_positive_peak*low/100:
 				k_start_rise = k
 				break
 			k -= 1
@@ -212,13 +223,13 @@ class PeakSignal(Signal):
 				raise TypeError(f'`{name}` must be a float number, but received object of type {type(x)}.')
 		if not low < high:
 			raise ValueError(f'`low` must be less than `high`, received low={low} and high={high}.')
-		k = self.samples.argmax()
+		k = self._samples.argmax()
 		k_start_fall = None
 		k_stop_fall = None
-		while k < len(self.samples):
-			if self.samples[k] - self.baseline > self.amplitude*high/100:
+		while k < len(self._samples):
+			if self._samples[k] - self._baseline_positive_peak > self._amplitude_positive_peak*high/100:
 				k_start_fall = k
-			if self.samples[k] - self.baseline < self.amplitude*low/100:
+			if self._samples[k] - self._baseline_positive_peak < self._amplitude_positive_peak*low/100:
 				k_stop_fall = k + 1
 				break
 			k += 1
@@ -235,15 +246,15 @@ class PeakSignal(Signal):
 			raise TypeError(f'`threshold` must be a float number, received object of type {type(threshold)}.')
 		if not 0 < threshold < 100:
 			raise ValueError(f'`threshold` must be between 0 and 100, received {threshold}.')
-		if np.isnan(self.amplitude):
+		if np.isnan(self._amplitude_positive_peak):
 			raise RuntimeError('Cannot find the amplitude of the signal.')
-		if np.isnan(self.baseline):
+		if np.isnan(self._baseline_positive_peak):
 			raise RuntimeError('Cannot find the baseline of the signal.')
 		rising_edge_indices = self.find_rising_edge_indices(low=threshold, high=99)
 		return float(interpolate.interp1d(
-			x = self.samples[rising_edge_indices],
+			x = self._samples[rising_edge_indices],
 			y = self.time[rising_edge_indices],
-		)(self.amplitude*threshold/100 + self.baseline))
+		)(self._amplitude_positive_peak*threshold/100 + self._baseline_positive_peak))
 	
 	def find_time_at_falling_edge(self, threshold: float) -> float:
 		"""Given some threshold value (as a percentage) returns the time 
@@ -254,15 +265,15 @@ class PeakSignal(Signal):
 			raise TypeError(f'`threshold` must be a float number, received object of type {type(threshold)}.')
 		if not 0 < threshold < 100:
 			raise ValueError(f'`threshold` must be between 0 and 100, received {threshold}.')
-		if np.isnan(self.amplitude):
+		if np.isnan(self._amplitude_positive_peak):
 			raise RuntimeError('Cannot find the amplitude of the signal.')
-		if np.isnan(self.baseline):
+		if np.isnan(self._baseline_positive_peak):
 			raise RuntimeError('Cannot find the baseline of the signal.')
 		falling_edge_indices = self.find_falling_edge_indices(low=threshold, high=99)
 		return float(interpolate.interp1d(
-			x = self.samples[falling_edge_indices],
+			x = self._samples[falling_edge_indices],
 			y = self.time[falling_edge_indices],
-		)(self.amplitude*threshold/100 + self.baseline))
+		)(self._amplitude_positive_peak*threshold/100 + self._baseline_positive_peak))
 	
 	def find_time_over_threshold(self, threshold: float) -> float:
 		"""Returns the time over some threshold where `threshold` is a 
@@ -273,6 +284,56 @@ class PeakSignal(Signal):
 		if not 0 < threshold < 100:
 			raise ValueError(f'`threshold` must be within 0 and 100, received {threshold}.')
 		return self.find_time_at_falling_edge(threshold) - self.find_time_at_rising_edge(threshold)
+
+class PeakSignal(PositivePeakSignal):
+	"""Class to handle peaked signals, both positive and negative."""
+	def __init__(self, time, samples, peak_polarity:str='positive'):
+		"""Create a `PeakSignal` object.
+		
+		Arguments
+		---------
+		time: array like
+			An array like object with the times for each sample.
+		samples: array like
+			An array like object with the samples.
+		peak_polarity: str, default `'positive'`
+			Options are `'positive'`, `'negative'` and `'guess'`. This
+			defines how the peak will be searched.
+		"""
+		PEAK_POLARITY_OPTIONS = {'positive','negative','guess'}
+		if peak_polarity not in PEAK_POLARITY_OPTIONS:
+			raise ValueError(f'`peak_polarity` must be one of {PEAK_POLARITY_OPTIONS}, received {repr(peak_polarity)}. ')
+		if peak_polarity == 'positive':
+			self._peak_sign = 1
+		elif peak_polarity == 'negative':
+			self._peak_sign = -1
+		elif peak_polarity == 'guess':
+			self._peak_sign = guess_peak_sign(samples)
+		
+		super().__init__(
+			time = time,
+			samples = samples*self._peak_sign,
+		)
+	
+	@property
+	def samples(self):
+		return self._samples*self._peak_sign
+	
+	@property
+	def baseline(self) -> float:
+		return self._baseline_positive_peak * self._peak_sign
+	
+	@property
+	def amplitude(self) -> float:
+		return self._amplitude_positive_peak * self._peak_sign
+	
+	@property
+	def peak_integral(self) -> float:
+		return self._peak_integral_positive_peak * self._peak_sign
+	
+	@property
+	def integral_from_baseline(self) -> float:
+		return self._integral_from_baseline_positive_peak * self._peak_sign
 
 def draw_in_plotly(signal, fig=None, baseline=True, noise=True, amplitude=True, rise_time=True, time_over_noise=True, peak_integral=True, peak_start_time=True):
 	"""Plot the signal along with the different quantities. `fig` is a 
@@ -296,8 +357,8 @@ def draw_in_plotly(signal, fig=None, baseline=True, noise=True, amplitude=True, 
 	)
 	if peak_integral == True:
 		try:
-			t_start = signal.find_time_at_rising_edge(signal.noise/signal.amplitude*100)
-			t_stop = signal.find_time_at_falling_edge(signal.noise/signal.amplitude*100)
+			t_start = signal.find_time_at_rising_edge(signal.noise/abs(signal.amplitude)*100)
+			t_stop = signal.find_time_at_falling_edge(signal.noise/abs(signal.amplitude)*100)
 		except:
 			t_start = float('NaN')
 			t_stop = float('NaN')
@@ -336,7 +397,7 @@ def draw_in_plotly(signal, fig=None, baseline=True, noise=True, amplitude=True, 
 	if amplitude == True:
 		fig.add_trace(
 			go.Scatter(
-				x = [signal.time[np.argmax(signal.samples)]]*2,
+				x = [signal.t_max]*2,
 				y = [signal.baseline, signal.baseline + signal.amplitude],
 				name = f'Amplitude ({signal.amplitude:.2e})',
 				mode = 'lines+markers',
@@ -359,7 +420,7 @@ def draw_in_plotly(signal, fig=None, baseline=True, noise=True, amplitude=True, 
 			)
 		)
 	if time_over_noise == True:
-		threshold = signal.noise/signal.amplitude*100
+		threshold = signal.noise/abs(signal.amplitude)*100
 		try:
 			t_start = signal.find_time_at_rising_edge(threshold)
 		except:
